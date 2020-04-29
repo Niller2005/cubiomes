@@ -20,7 +20,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install libcurl
-        run: choco install curl
+      - name: Install cygwin
+        run: choco install cygwin
+      - name: curl version
+        run: curl --version
       - name: make god
         run: make god
