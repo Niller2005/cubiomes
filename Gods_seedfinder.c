@@ -3,6 +3,8 @@
 #include "math.h"
 #include <time.h>
 #include <signal.h>
+#include <stdio.h>
+#include <curl/curl.h>
 
 struct compactinfo_t
 {
@@ -89,6 +91,34 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 	LayerStack g = setupGenerator(MC_1_15);
 	int *cache = allocCache(&g.layers[L_VORONOI_ZOOM_1], w, h);
+	CURL *curl;
+	CURLcode res;
+
+	/* In windows, this will init the winsock stuff */
+	curl_global_init(CURL_GLOBAL_ALL);
+
+	/* get a curl handle */
+	curl = curl_easy_init();
+	if (curl)
+	{
+		/* First set the URL that is about to receive our POST. This URL can
+       just as well be a https:// URL if that is what should receive the
+       data. */
+		curl_easy_setopt(curl, CURLOPT_URL, "https://jsonplaceholder.typicode.com/posts");
+		/* Now specify the POST data */
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "title=test&body=test&userId=1");
+
+		/* Perform the request, res will get the return code */
+		res = curl_easy_perform(curl);
+		/* Check for errors */
+		if (res != CURLE_OK)
+			fprintf(stderr, "curl_easy_perform() failed: %s\n",
+							curl_easy_strerror(res));
+
+		/* always cleanup */
+		curl_easy_cleanup(curl);
+	}
+	curl_global_cleanup();
 
 	for (s = info.seedStart; s != info.seedEnd; s++)
 	{
@@ -185,17 +215,17 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 		enum BiomeID biomes[] = {ice_spikes, bamboo_jungle, desert, plains, ocean, jungle, forest, mushroom_fields, mesa, flower_forest, warm_ocean, frozen_ocean, megaTaiga, roofedForest, extremeHills, swamp, savanna, icePlains};
 		int biome_exists[sizeof(biomes) / sizeof(enum BiomeID)] = {0};
 		enum BiomeID major_biomes[11][16] = {
-			{desert, desert_lakes, desert_hills},
-			{plains, sunflower_plains},
-			{extremeHills, mountains, wooded_mountains, gravelly_mountains, modified_gravelly_mountains, mountain_edge},
-			{jungle, jungle_hills, modified_jungle, jungle_edge, modified_jungle_edge, bamboo_jungle, bamboo_jungle_hills},
-			{forest, wooded_hills, flower_forest, birch_forest, birch_forest_hills, tall_birch_forest, tall_birch_hills},
-			{roofedForest, dark_forest, dark_forest_hills},
-			{badlands, badlands_plateau, modified_badlands_plateau, wooded_badlands_plateau, modified_wooded_badlands_plateau, eroded_badlands},
-			{swamp, swamp_hills},
-			{savanna, savanna_plateau, shattered_savanna, shattered_savanna_plateau},
-			{icePlains, ice_spikes},
-			{taiga, taiga_hills, taiga_mountains, snowy_taiga, snowy_taiga_hills, snowy_taiga_mountains, giant_tree_taiga, giant_tree_taiga_hills, giant_spruce_taiga, giant_spruce_taiga_hills}};
+				{desert, desert_lakes, desert_hills},
+				{plains, sunflower_plains},
+				{extremeHills, mountains, wooded_mountains, gravelly_mountains, modified_gravelly_mountains, mountain_edge},
+				{jungle, jungle_hills, modified_jungle, jungle_edge, modified_jungle_edge, bamboo_jungle, bamboo_jungle_hills},
+				{forest, wooded_hills, flower_forest, birch_forest, birch_forest_hills, tall_birch_forest, tall_birch_hills},
+				{roofedForest, dark_forest, dark_forest_hills},
+				{badlands, badlands_plateau, modified_badlands_plateau, wooded_badlands_plateau, modified_wooded_badlands_plateau, eroded_badlands},
+				{swamp, swamp_hills},
+				{savanna, savanna_plateau, shattered_savanna, shattered_savanna_plateau},
+				{icePlains, ice_spikes},
+				{taiga, taiga_hills, taiga_mountains, snowy_taiga, snowy_taiga_hills, snowy_taiga_mountains, giant_tree_taiga, giant_tree_taiga_hills, giant_spruce_taiga, giant_spruce_taiga_hills}};
 		char *major_biomes_string[] = {"desert", "plains", "extremeHills", "jungle", "forest", "roofedForest", "mesa", "swamp", "savanna", "icePlains", "taiga"};
 		int major_biome_counter[11] = {0};
 
@@ -311,11 +341,11 @@ int main(int argc, char *argv[])
 	if (argc <= 0)
 	{
 		printf("find_compactbiomes [seed_start] [seed_end] [threads] [range]\n"
-			   "\n"
-			   "  seed_start    starting seed for search [long, default=0]\n"
-			   "  end_start     end seed for search [long, default=-1]\n"
-			   "  threads       number of threads to use [uint, default=1]\n"
-			   "  range         search range (in blocks) [uint, default=1024]\n");
+					 "\n"
+					 "  seed_start    starting seed for search [long, default=0]\n"
+					 "  end_start     end seed for search [long, default=-1]\n"
+					 "  threads       number of threads to use [uint, default=1]\n"
+					 "  range         search range (in blocks) [uint, default=1024]\n");
 		exit(1);
 	}
 	if (argc <= 1 || sscanf(argv[1], "%" PRId64, &seedStart) != 1)
@@ -366,7 +396,7 @@ int main(int argc, char *argv[])
 
 	enum BiomeID biomes[] = {ice_spikes, bamboo_jungle, desert, plains, ocean, jungle, forest, mushroom_fields, mesa, flower_forest, warm_ocean, frozen_ocean, megaTaiga, roofedForest, extremeHills, swamp, savanna, icePlains};
 	filter = setupBiomeFilter(biomes,
-							  sizeof(biomes) / sizeof(enum BiomeID));
+														sizeof(biomes) / sizeof(enum BiomeID));
 	minscale = 256; // terminate search at this layer scale
 	// TODO: simple structure filter
 	withHut = 1;
@@ -374,8 +404,8 @@ int main(int argc, char *argv[])
 	total_seeds = (uint64_t)seedEnd - (uint64_t)seedStart;
 
 	printf("Starting search through seeds %" PRId64 " to %" PRId64 ", using %u threads.\n"
-		   "Search radius = %u.\n",
-		   seedStart, seedEnd, threads, range);
+				 "Search radius = %u.\n",
+				 seedStart, seedEnd, threads, range);
 
 	thread_id_t threadID[threads];
 	struct compactinfo_t info[threads];
