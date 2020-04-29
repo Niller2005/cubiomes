@@ -1,6 +1,7 @@
 CC      = gcc
 AR      = ar
 ARFLAGS = cr
+LIBS 		= -lcurl
 override LDFLAGS = -lm
 override CFLAGS += -Wall -fwrapv -march=native
 #override CFLAGS += -DUSE_SIMD
@@ -39,7 +40,7 @@ find_quadhuts.o: find_quadhuts.c
 
 god: CFLAGS += -O3 -march=native
 god: Gods_seedfinder.o layers.o generator.o finders.o util.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 Gods_seedfinder.o: Gods_seedfinder.c
 	$(CC) -c $(CFLAGS) $<

@@ -3,6 +3,7 @@
 #include "math.h"
 #include <time.h>
 #include <signal.h>
+#include <curl/curl.h>
 #include "util.h"
 
 struct compactinfo_t
@@ -266,6 +267,17 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 		viable_count++;
 
+		char post_string[3000];
+		snprintf(post_string, 3000, "seed=%" PRId64, s);
+		snprintf(post_string + strlen(post_string), 3000 - strlen(post_string), "&huts=%i", hut_count);
+		snprintf(post_string + strlen(post_string), 3000 - strlen(post_string), "&monuments=%i", monument_count);
+		for (int i = 0; i < sizeof(biome_percent_counter) / sizeof(int); i++) {
+			char biome_string[64];
+			snprintf(biome_string, sizeof(biome_string), "&%s=%.2f", biome_percent_string[i], (biome_percent_counter[i] * (step * step) / (fw * fh)) * 100);
+			strncat(post_string, biome_string, sizeof(post_string));
+		}
+
+
 		char out[512];
 		snprintf(out, 512, "%" PRId64, s);
 		snprintf(out + strlen(out), 512 - strlen(out), ",%i", hut_count);
@@ -293,6 +305,21 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 			printf("%s", info_out);
 			fflush(stdout);
 		}
+
+		CURL *hnd = curl_easy_init();
+
+		curl_easy_setopt(hnd, CURLOPT_CUSTOMREQUEST, "POST");
+		curl_easy_setopt(hnd, CURLOPT_URL, getenv("GSF_API_URL") || "http://95.217.208.106:32769/seeds");
+
+		struct curl_slist *headers = NULL;
+		headers = curl_slist_append(headers, "cache-control: no-cache");
+		headers = curl_slist_append(headers, "content-type: application/x-www-form-urlencoded");
+		curl_easy_setopt(hnd, CURLOPT_HTTPHEADER, headers);
+
+		curl_easy_setopt(hnd, CURLOPT_POSTFIELDS, post_string);
+
+		curl_easy_perform(hnd);
+		curl_easy_cleanup(hnd);
 
 		FILE *fp = fopen("found.csv", "r");
 		if (fp == NULL)
@@ -350,8 +377,8 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 			// Map the biomes to a color buffer and save to an image.
 			biomesToImage(rgb, biomeColours, biomes, areaWidth, areaHeight, scale, 2);
-			char filename[20];
-			snprintf(filename, 20, "%" PRId64 ".ppm", s);
+			char filename[64];
+			snprintf(filename, sizeof(filename), "seed_img/%" PRId64 ".ppm", s);
 			savePPM(filename, rgb, imgWidth, imgHeight);
 
 			// Clean up.

@@ -1,12 +1,17 @@
-version: '3'
-
+version: "3.7"
 services:
   cubiomes:
     image: cubiomes
     build: .
     environment:
       - GSF_START=1
-      - GSF_END=1000
+      - GSF_END=100000
       - GSF_THREADS=1
       - GSF_FILTER_RANGE=1500
       - GSF_FULL_RANGE=2048
+      - GSF_GENIMG=y
+      - GSF_RAW=0
+      - GSF_API_URL=http://95.217.208.106:32769/seeds
+    volumes:
+      - ./found.csv:/usr/src/app/found.csv
+      - ./seed_img:/usr/src/app/seed_img
