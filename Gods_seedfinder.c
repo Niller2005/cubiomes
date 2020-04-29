@@ -91,34 +91,6 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 	LayerStack g = setupGenerator(MC_1_15);
 	int *cache = allocCache(&g.layers[L_VORONOI_ZOOM_1], w, h);
-	CURL *curl;
-	CURLcode res;
-
-	/* In windows, this will init the winsock stuff */
-	curl_global_init(CURL_GLOBAL_ALL);
-
-	/* get a curl handle */
-	curl = curl_easy_init();
-	if (curl)
-	{
-		/* First set the URL that is about to receive our POST. This URL can
-       just as well be a https:// URL if that is what should receive the
-       data. */
-		curl_easy_setopt(curl, CURLOPT_URL, "https://jsonplaceholder.typicode.com/posts");
-		/* Now specify the POST data */
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "title=test&body=test&userId=1");
-
-		/* Perform the request, res will get the return code */
-		res = curl_easy_perform(curl);
-		/* Check for errors */
-		if (res != CURLE_OK)
-			fprintf(stderr, "curl_easy_perform() failed: %s\n",
-							curl_easy_strerror(res));
-
-		/* always cleanup */
-		curl_easy_cleanup(curl);
-	}
-	curl_global_cleanup();
 
 	for (s = info.seedStart; s != info.seedEnd; s++)
 	{
@@ -278,14 +250,59 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 		viable_count++;
 
+		CURL *curl;
+		CURLcode res;
+
+		curl_global_init(CURL_GLOBAL_ALL);
+
+		curl = curl_easy_init();
+
 		printing = 1;
+		char post_string[1024];
+		snprintf(post_string, sizeof(post_string), "seed=%" PRIu64 "&hut1=%i,%i&hut2=%i,%i&ocean=%.2f", s, goodhuts[0].x, goodhuts[0].z, goodhuts[1].x, goodhuts[1].z, ocean_percent);
+
 		fprintf(stderr, "\r%*c", 105, ' ');
 		printf("\n%15s: %" PRId64 "\n", "Found", s);
 		printf("%15s: %d,%i & %i,%i\n", "Huts", goodhuts[0].x, goodhuts[0].z, goodhuts[1].x, goodhuts[1].z);
 		printf("%15s: %.2f%%\n", "Ocean", ocean_percent);
 		for (int i = 0; i < sizeof(major_biome_counter) / sizeof(int); i++)
+		{
+			char biome_string[1024];
+			snprintf(biome_string, sizeof(biome_string), "&%s=%.2f", major_biomes_string[i], (major_biome_counter[i] * (step * step) / (fw * fh)) * 100);
 			printf("%15s: %.2f%%\n", major_biomes_string[i], (major_biome_counter[i] * (step * step) / (fw * fh)) * 100);
-		printf("\n");
+			strncat(post_string, biome_string, sizeof(biome_string));
+		}
+
+		if (curl)
+		{
+
+			curl_easy_setopt(curl, CURLOPT_URL, "http://95.217.208.106:3001/seeds");
+			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_string);
+
+			res = curl_easy_perform(curl);
+			if (res == CURLE_OK)
+			{
+				long code;
+				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+
+				if (code == 409)
+				{
+					printf("\n%15s", "Seed already found");
+				}
+				else
+				{
+					printf("\n%15sSeed: %" PRId64 "\n", "added", s);
+				}
+
+				printf("\n");
+			}
+			else
+			{
+				fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+			}
+			curl_easy_cleanup(curl);
+		}
+		curl_global_cleanup();
 		fflush(stdout);
 		printing = 0;
 
