@@ -3,6 +3,7 @@
 #include "math.h"
 #include <time.h>
 #include <signal.h>
+#include "util.h"
 
 struct compactinfo_t
 {
@@ -13,6 +14,8 @@ struct compactinfo_t
 	int withHut, withMonument;
 	int minscale;
 	int thread_id;
+	char genimage;
+	int raw;
 };
 
 int64_t count = 0;
@@ -32,6 +35,8 @@ time_t last_time;
 int printing = 0;
 int exited = 0;
 int exit_counter = 0;
+int raw = 0;
+
 void intHandler()
 {
 	if (!exited)
@@ -114,9 +119,9 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 		applySeed(&g, s);
 		int x, z;
 
+		int monument_count = 0;
 		if (info.withMonument)
 		{
-			int monument_found = 0;
 			int r = info.fullrange / MONUMENT_CONFIG.regionSize;
 			for (z = -r; z < r; z++)
 			{
@@ -126,22 +131,18 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 					p = getLargeStructurePos(MONUMENT_CONFIG, s, x, z);
 					if (isViableOceanMonumentPos(g, cache, p.x, p.z))
 						if (abs(p.x) < info.fullrange && abs(p.z) < info.fullrange)
-							monument_found = 1;
-					if (monument_found)
-						break;
+							monument_count++;
 				}
-				if (monument_found)
-					break;
 			}
-			if (!monument_found)
+			if (monument_count == 0)
 				continue;
 		}
 
 		Pos goodhuts[2];
+		int hut_count = 0;
 		if (info.withHut)
 		{
 			Pos huts[100];
-			int counter = 0;
 			int r = info.fullrange / SWAMP_HUT_CONFIG.regionSize;
 			for (z = -r; z < r; z++)
 			{
@@ -153,8 +154,8 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 					{
 						if (abs(p.x) < info.fullrange && abs(p.z) < info.fullrange)
 						{
-							huts[counter] = p;
-							counter++;
+							huts[hut_count] = p;
+							hut_count++;
 							//printf("%i\n", huts[0].x);
 						}
 					}
@@ -162,9 +163,9 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 			}
 
 			int huts_found = 0;
-			for (int i = 0; i < counter; i++)
+			for (int i = 0; i < hut_count; i++)
 			{
-				for (int j = 0; j < counter; j++)
+				for (int j = 0; j < hut_count; j++)
 				{
 					if (j == i)
 						continue;
@@ -192,8 +193,8 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 		int ocean_count = 0;
 		// biome enum defined in layers.h
-		enum BiomeID biomes[] = {ice_spikes, bamboo_jungle, desert, plains, ocean, jungle, forest, mushroom_fields, mesa, flower_forest, warm_ocean, frozen_ocean, megaTaiga, roofedForest, extremeHills, swamp, savanna, icePlains};
-		int biome_exists[sizeof(biomes) / sizeof(enum BiomeID)] = {0};
+		enum BiomeID req_biomes[] = {ice_spikes, bamboo_jungle, desert, plains, ocean, jungle, forest, mushroom_fields, mesa, flower_forest, warm_ocean, frozen_ocean, megaTaiga, roofedForest, extremeHills, swamp, savanna, icePlains};
+		int biome_exists[sizeof(req_biomes) / sizeof(enum BiomeID)] = {0};
 		enum BiomeID major_biome_percent[11][16] = {
 			{desert, desert_lakes, desert_hills},
 			{plains, sunflower_plains},
@@ -223,7 +224,7 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 					ocean_count++;
 				if (abs(x) < info.range && abs(z) < info.range)
 					for (int i = 0; i < sizeof(biome_exists) / sizeof(int); i++)
-						if (biome == biomes[i])
+						if (biome == req_biomes[i])
 							biome_exists[i] = -1;
 				if (!isOceanic(biome))
 					for (int i = 0; i < sizeof(major_biome_percent_counter) / sizeof(int); i++)
@@ -257,7 +258,7 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 		//verify all biomes are present
 		int all_biomes = 1;
-		for (int i = 0; i < sizeof(biomes) / sizeof(enum BiomeID); i++)
+		for (int i = 0; i < sizeof(req_biomes) / sizeof(enum BiomeID); i++)
 			if (biome_exists[i] != -1)
 				all_biomes = 0;
 		if (!all_biomes)
@@ -266,22 +267,40 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 		viable_count++;
 
 		char out[512];
-		snprintf(out + strlen(out), 512 - strlen(out), "\n%17s: %" PRId64, "Found", s);
-		snprintf(out + strlen(out), 512 - strlen(out), "\n%17s: %i,%i & %i,%i", "Huts", goodhuts[0].x, goodhuts[0].z, goodhuts[1].x, goodhuts[1].z);
-		snprintf(out + strlen(out), 512 - strlen(out), "\n%17s: %5.2f%%", "Ocean", ocean_percent);
-		for (int i = 0; i < sizeof(major_biome_percent_counter) / sizeof(int); i++)
-			snprintf(out + strlen(out), 512 - strlen(out), "\n%17s: %5.2f%%", major_biome_percent_string[i], (major_biome_percent_counter[i] * (step * step) / (fw * fh)) * 100);
+		snprintf(out, 512, "%" PRId64, s);
+		snprintf(out + strlen(out), 512 - strlen(out), ",%i", hut_count);
+		snprintf(out + strlen(out), 512 - strlen(out), ",%i", monument_count);
+		for (int i = 0; i < sizeof(biome_percent_counter) / sizeof(int); i++)
+			snprintf(out + strlen(out), 512 - strlen(out), ",%.2f%%", (biome_percent_counter[i] * (step * step) / (fw * fh)) * 100);
 		snprintf(out + strlen(out), 512 - strlen(out), "\n");
-		fprintf(stderr, "\r%*c", 105, ' ');
-		fflush(stdout);
-		printf("%s", out);
-		fflush(stdout);
+
+		if (raw)
+		{
+			printf("%s", out);
+			fflush(stdout);
+		}
+		else
+		{
+			char info_out[512];
+			snprintf(info_out, 512, "\n%17s: %" PRId64, "Found", s);
+			snprintf(info_out + strlen(info_out), 512 - strlen(info_out), "\n%17s: %i,%i & %i,%i", "Huts", goodhuts[0].x, goodhuts[0].z, goodhuts[1].x, goodhuts[1].z);
+			snprintf(info_out + strlen(info_out), 512 - strlen(info_out), "\n%17s: %5.2f%%", "Ocean", ocean_percent);
+			for (int i = 0; i < sizeof(major_biome_percent_counter) / sizeof(int); i++)
+				snprintf(info_out + strlen(info_out), 512 - strlen(info_out), "\n%17s: %5.2f%%", major_biome_percent_string[i], (major_biome_percent_counter[i] * (step * step) / (fw * fh)) * 100);
+			snprintf(info_out + strlen(info_out), 512 - strlen(info_out), "\n");
+			fprintf(stderr, "\r%*c", 105, ' ');
+			fflush(stdout);
+			printf("%s", info_out);
+			fflush(stdout);
+		}
 
 		FILE *fp = fopen("found.csv", "r");
 		if (fp == NULL)
 		{
 			fp = fopen("found.csv", "a");
 			fprintf(fp, "seed");
+			fprintf(fp, ",huts");
+			fprintf(fp, ",monuments");
 			for (int i = 0; i < sizeof(biome_percent_counter) / sizeof(int); i++)
 				fprintf(fp, ",%s", biome_percent_string[i]);
 			fprintf(fp, "\n");
@@ -291,17 +310,54 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 			fclose(fp);
 			fp = fopen("found.csv", "a");
 		}
-		fprintf(fp, "%" PRId64, s);
+		//fprintf(fp, "%" PRId64, s);
 		//fprintf(fp, ",%i:%i & %i:%i", goodhuts[0].x, goodhuts[0].z, goodhuts[1].x, goodhuts[1].z);
 		//fprintf(fp, ",%.2f%%", ocean_percent);
 
-		for (int i = 0; i < sizeof(biome_percent_counter) / sizeof(int); i++)
-			fprintf(fp, ",%.2f%%", (biome_percent_counter[i] * (step * step) / (fw * fh)) * 100);
+		//fprintf(fp, ",%i", hut_count);
+		//fprintf(fp, ",%i", monument_count);
+
+		//for (int i = 0; i < sizeof(biome_percent_counter) / sizeof(int); i++)
+		//	fprintf(fp, ",%.2f%%", (biome_percent_counter[i] * (step * step) / (fw * fh)) * 100);
 
 		//for (int i = 0; i < sizeof(major_biome_counter) / sizeof(int); i++)
 		//	fprintf(fp, ",%.2f%%", (major_biome_counter[i] * (step * step) / (fw * fh)) * 100);
-		fprintf(fp, "\n");
+		fprintf(fp, "%s", out);
 		fclose(fp);
+
+		if (info.genimage == 'y')
+		{
+			unsigned char biomeColours[256][3];
+
+			// Initialize a colour map for biomes.
+			initBiomeColours(biomeColours);
+
+			// Extract the desired layer.
+			Layer *layer = &g.layers[L_SHORE_16];
+
+			int areaX = -128, areaZ = -128;
+			unsigned int areaWidth = 256, areaHeight = 256;
+			unsigned int scale = 2;
+			unsigned int imgWidth = areaWidth * scale, imgHeight = areaHeight * scale;
+
+			// Allocate a sufficient buffer for the biomes and for the image pixels.
+			int *biomes = allocCache(layer, areaWidth, areaHeight);
+			unsigned char *rgb = (unsigned char *)malloc(3 * imgWidth * imgHeight);
+
+			// Apply the seed only for the required layers and generate the area.
+			setWorldSeed(layer, s);
+			genArea(layer, biomes, areaX, areaZ, areaWidth, areaHeight);
+
+			// Map the biomes to a color buffer and save to an image.
+			biomesToImage(rgb, biomeColours, biomes, areaWidth, areaHeight, scale, 2);
+			char filename[20];
+			snprintf(filename, 20, "%" PRId64 ".ppm", s);
+			savePPM(filename, rgb, imgWidth, imgHeight);
+
+			// Clean up.
+			free(biomes);
+			free(rgb);
+		}
 	}
 
 	freeGenerator(g);
@@ -315,11 +371,11 @@ static DWORD WINAPI searchCompactBiomesThread(LPVOID data)
 
 int main(int argc, char *argv[])
 {
-	printf("Build: 36\n");
 	initBiomes();
 
 	int64_t seedStart, seedEnd;
 	unsigned int threads, t, range, fullrange;
+	char genimage;
 	BiomeFilter filter;
 	int withHut, withMonument;
 	int minscale;
@@ -380,6 +436,19 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
+	if (argc <= 6 || sscanf(argv[6], "%c", &genimage) != 1)
+	{
+		printf("Generate images? [y/n]: ");
+		if (!scanf(" %c", &genimage))
+		{
+			printf("That's not right");
+			exit(1);
+		}
+	}
+	if (argc <= 7 || sscanf(argv[7], "%u", &raw) != 1)
+	{
+		raw = 0;
+	}
 
 	enum BiomeID biomes[] = {ice_spikes, bamboo_jungle, desert, plains, ocean, jungle, forest, mushroom_fields, mesa, flower_forest, warm_ocean, frozen_ocean, megaTaiga, roofedForest, extremeHills, swamp, savanna, icePlains};
 	filter = setupBiomeFilter(biomes,
@@ -390,14 +459,17 @@ int main(int argc, char *argv[])
 	withMonument = 1;
 	total_seeds = (uint64_t)seedEnd - (uint64_t)seedStart;
 
-	printf("Starting search through seeds %" PRId64 " to %" PRId64 ", using %u threads.\n"
-		   "Search radius = %u.\n",
-		   seedStart, seedEnd, threads, range);
-
-	start_time = time(NULL);
-	char time_start[20];
-	strftime(time_start, 20, "%m/%d/%Y %H:%M:%S", localtime(&start_time));
-	printf("Started: %s\n", time_start);
+	if (!raw)
+	{
+		printf("Build: 37\n");
+		printf("Starting search through seeds %" PRId64 " to %" PRId64 ", using %u threads.\n"
+			   "Search radius = %u.\n",
+			   seedStart, seedEnd, threads, range);
+		start_time = time(NULL);
+		char time_start[20];
+		strftime(time_start, 20, "%m/%d/%Y %H:%M:%S", localtime(&start_time));
+		printf("Started: %s\n", time_start);
+	}
 
 	thread_id_t threadID[threads];
 	struct compactinfo_t info[threads];
@@ -415,15 +487,21 @@ int main(int argc, char *argv[])
 		info[t].withMonument = withMonument;
 		info[t].minscale = minscale;
 		info[t].thread_id = t;
+		info[t].genimage = genimage;
 	}
 	info[threads - 1].seedEnd = seedEnd;
 
-	signal(SIGINT, intHandler);
-	// start threads
+	if (!raw)
+		signal(SIGINT, intHandler);
+
+		// start threads
 #ifdef USE_PTHREAD
 
-	pthread_t stats;
-	pthread_create(&stats, NULL, statTracker, NULL);
+	if (!raw)
+	{
+		pthread_t stats;
+		pthread_create(&stats, NULL, statTracker, NULL);
+	}
 
 	for (t = 0; t < threads; t++)
 	{
@@ -438,7 +516,8 @@ int main(int argc, char *argv[])
 
 #else
 
-	CreateThread(NULL, 0, statTracker, NULL, 0, NULL);
+	if (!raw)
+		CreateThread(NULL, 0, statTracker, NULL, 0, NULL);
 
 	for (t = 0; t < threads; t++)
 	{
@@ -449,6 +528,9 @@ int main(int argc, char *argv[])
 	exited = 1;
 
 #endif
+
+	if (raw)
+		return 0;
 
 	printing = 1;
 	fprintf(stderr, "\r%*c", 105, ' ');
@@ -467,6 +549,5 @@ int main(int argc, char *argv[])
 	printf("\n\nPress [ENTER] to exit\n");
 	fflush(stdout);
 	getchar();
-
 	return 0;
 }
