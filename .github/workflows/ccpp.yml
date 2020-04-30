@@ -21,4 +21,4 @@ jobs:
    steps:
     - uses: actions/checkout@v2
     - name: make god
-      run: docker run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp gcc:4.9 make god
+      run: docker run --rm -v ".":/usr/src/myapp -w /usr/src/myapp gcc:4.9 make god
