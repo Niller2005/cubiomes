@@ -17,12 +17,13 @@ jobs:
       run: make god
       
   build-windows:
-   runs-on: ubuntu-latest
+   runs-on: windows-latest
    steps:
     - uses: actions/checkout@v2
-    - name: Install mingw
-      run: sudo apt-get install mingw-w64
-    - name: Install Libcurl 
-      run: sudo apt-get install libcurl4 libcurl4-openssl-dev
+    - name: Install libcurl
+      uses: lukka/run-vcpkg@v2.1
+      with:
+        setupOnly: true
+    - run: $VCPKG_ROOT/vcpkg install curl[tool]
     - name: make god
-      run: x86_64-w64-mingw32-gcc -o god.exe Gods_seedfinder.o layers.o generator.o finders.o util.o -lm -pthread -lcurl
+      run: make god
