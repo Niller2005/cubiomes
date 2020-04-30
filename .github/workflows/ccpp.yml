@@ -21,7 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Install cygwin
-        run: choco install cygwin
+        run: choco install --no-progress cygwin
+      - name: Install cygwin additional packages
+        run: |
+          C:\tools\cygwin\cygwinsetup.exe -qgnNdO -R C:/tools/cygwin -s http://mirrors.kernel.org/sourceware/cygwin/ -P libcurl
+        shell: cmd
       - name: curl version
         run: curl --version
       - name: make god
