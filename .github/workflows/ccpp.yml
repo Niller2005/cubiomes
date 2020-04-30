@@ -20,5 +20,7 @@ jobs:
    runs-on: windows-latest
    steps:
     - uses: actions/checkout@v2
+    - name: Install curl
+      run: vcpkg install curl
     - name: make god
-      run: docker run --rm -v .:/usr/src/myapp -w /usr/src/myapp gcc:4.9 make god
+      run: make god
