@@ -24,9 +24,7 @@ jobs:
         run: choco install --no-progress cygwin
       - name: Install cygwin additional packages
         run: |
-          C:\tools\cygwin\cygwinsetup.exe -qgnNdO -R C:/tools/cygwin -s http://mirrors.kernel.org/sourceware/cygwin/ -P libcurl
+          C:\tools\cygwin\cygwinsetup.exe -qgnNdO -R C:/tools/cygwin -s http://cygwin.mirror.constant.com -P libcurl4,libcurl-devel,curl
         shell: cmd
-      - name: curl version
-        run: curl --version
       - name: make god
         run: make god
