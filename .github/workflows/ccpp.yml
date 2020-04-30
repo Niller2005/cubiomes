@@ -21,6 +21,6 @@ jobs:
    steps:
     - uses: actions/checkout@v2
     - name: Install curl
-      run: vcpkg install curl
+      run: vcpkg install curl[tool]
     - name: make god
       run: make god
