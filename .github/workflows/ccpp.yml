@@ -17,14 +17,12 @@ jobs:
       run: make god
       
   build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install cygwin
-        run: choco install --no-progress cygwin
-      - name: Install cygwin additional packages
-        run: |
-          C:\tools\cygwin\cygwinsetup.exe -qgnNdO -R C:/tools/cygwin -s http://cygwin.mirror.constant.com -P libcurl4,libcurl-devel,curl
-        shell: cmd
-      - name: make god
-        run: make god
+   runs-on: ubuntu-latest
+   steps:
+    - uses: actions/checkout@v2
+    - name: Install mingw
+      run: sudo apt-get install mingw-w64
+    - name: Install Libcurl 
+      run: sudo apt-get install libcurl4 libcurl4-openssl-dev
+    - name: make god
+      run: x86_64-w64-mingw32-gcc -o god Gods_seedfinder.o layers.o generator.o finders.o util.o -lm -pthread -lcurl
