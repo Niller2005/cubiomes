@@ -20,10 +20,5 @@ jobs:
    runs-on: windows-latest
    steps:
     - uses: actions/checkout@v2
-    - name: Install libcurl
-      uses: lukka/run-vcpkg@v2.1
-      with:
-        setupOnly: true
-    - run: $VCPKG_ROOT/vcpkg install curl[tool]
     - name: make god
-      run: make god
+      run: docker run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp gcc:4.9 make god
