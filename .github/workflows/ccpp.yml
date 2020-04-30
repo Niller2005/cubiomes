@@ -25,4 +25,4 @@ jobs:
     - name: Install Libcurl 
       run: sudo apt-get install libcurl4 libcurl4-openssl-dev
     - name: make god
-      run: x86_64-w64-mingw32-gcc -o god Gods_seedfinder.o layers.o generator.o finders.o util.o -lm -pthread -lcurl
+      run: x86_64-w64-mingw32-gcc -o god.exe Gods_seedfinder.o layers.o generator.o finders.o util.o -lm -pthread -lcurl
